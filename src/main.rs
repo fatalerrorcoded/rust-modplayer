@@ -1,11 +1,17 @@
 use std::io::{Cursor, Read};
+use std::thread;
+use std::time::Duration;
+
 use byteorder::ReadBytesExt;
 use arr_macro::arr;
-use crate::sample::Sample;
-use crate::pattern::Pattern;
 
-mod sample;
-mod pattern;
+use crate::samples::Sample;
+use crate::patterns::Pattern;
+use crate::channel_state::ChannelState;
+
+mod samples;
+mod patterns;
+mod channel_state;
 
 static MOD_DATA: &[u8] = include_bytes!("../epic.mod");
 
@@ -39,6 +45,11 @@ fn main() {
 
     let nop_in_file = pattern_table.iter().max().unwrap() + 1;
 
+    if file_tag != "M.K." {
+        println!("\nFile has file tag {}, can only read M.K.", file_tag);
+        return;
+    }
+
     println!("Song name: {}", song_name);
     println!("Samples: {:#?}", samples);
     println!("Pattern count: {}, Song End Jump Position: {}", number_of_patterns, song_end_jump);
@@ -66,5 +77,39 @@ fn main() {
         }
     }
 
-    println!("{}", file_tag);
+    let mut current_speed = 6;
+    let mut current_tick = 0;
+    let mut current_line = 0;
+    let mut current_pattern = 0;
+    let mut processed_line = false;
+
+    let channel_state = [ChannelState::new(); 4];    
+
+    'main: loop {
+        if !processed_line {
+            let line = &patterns[pattern_table[current_pattern] as usize][current_line];
+            for i in 0..4 {
+                let effect = line[i].effect();
+                match effect.number() {
+                    0xf => {
+                        if effect.arg_joined() != 0 {
+                            current_speed = effect.arg_joined();
+                        }
+                    }
+                    _ => ()
+                }
+            }
+        }
+        current_tick += 1;
+        if current_tick >= current_speed {
+            current_tick = 0;
+            current_line += 1;
+            processed_line = false;
+        }
+        if current_line >= 64 {
+            current_line = 0;
+            current_pattern += 1;
+        }
+        if current_pattern >= number_of_patterns as usize { break 'main; }
+    }
 }
