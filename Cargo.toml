@@ -1,5 +1,5 @@
 [package]
-name = "modplayertest"
+name = "rust-modplayer"
 version = "0.1.0"
 authors = ["Martin Löffler <git@fatalerrorcoded.eu>"]
 edition = "2018"
