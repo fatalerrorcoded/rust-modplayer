@@ -1,10 +1,9 @@
 use std::io::{Cursor, Read};
 use std::thread;
-use std::time::Duration;
 use std::sync::mpsc;
 use std::{env, fs, path::Path};
 
-use byteorder::ReadBytesExt;
+use byteorder::{ReadBytesExt, WriteBytesExt, NativeEndian};
 use arr_macro::arr;
 
 use sample::{Frame, Signal};
@@ -62,15 +61,15 @@ fn main() {
     let nop_in_file = pattern_table.iter().max().unwrap() + 1;
 
     if file_tag != "M.K." {
-        println!("\nFile has file tag {}, can only read M.K.", file_tag);
+        eprintln!("\nFile has file tag {}, can only read M.K.", file_tag);
         return;
     }
 
-    println!("Song name: {}", song_name);
-    println!("Samples: {:#?}", samples);
-    println!("Pattern count: {}, Song End Jump Position: {}", number_of_patterns, song_end_jump);
-    println!("Patterns in file: {}", nop_in_file);
-    println!();
+    eprintln!("Song name: {}", song_name);
+    eprintln!("Samples: {:#?}", samples);
+    eprintln!("Pattern count: {}, Song End Jump Position: {}", number_of_patterns, song_end_jump);
+    eprintln!("Patterns in file: {}", nop_in_file);
+    eprintln!();
     
     let mut patterns = Vec::new();
     for _ in 0..nop_in_file {
@@ -87,60 +86,82 @@ fn main() {
         }
     }
 
+    
+
     // 10 seconds of buffer
     let (tx, rx) = mpsc::sync_channel::<((u8, u8), <SampleCursor as Signal>::Frame)>(44100 * 10);
 
-    let audio_thread = thread::spawn(move || {
-        let host = cpal::default_host();
-        let event_loop = host.event_loop();
-        let device = host.default_output_device().expect("no output device");
-        let mut supported_formats_range = device.supported_output_formats()
-            .expect("error while querying formats");
-        let mut format = supported_formats_range.find(|format| {
-            if format.data_type != cpal::SampleFormat::F32 { return false; }
-            if format.channels != 1 { return false; }
-            if format.min_sample_rate.0 > 44100 || format.max_sample_rate.0 < 44100 { return false; }
-            true
-        }).expect("No suitable format").with_max_sample_rate();
-        format.sample_rate = cpal::SampleRate(44100);
-        let stream_id = event_loop.build_output_stream(&device, &format).unwrap();
+    let audio_thread = {
+        if atty::is(atty::Stream::Stdout) {
+            thread::spawn(move || {
+                let host = cpal::default_host();
+                let event_loop = host.event_loop();
+                let device = host.default_output_device().expect("no output device");
+                let mut supported_formats_range = device.supported_output_formats()
+                    .expect("error while querying formats");
+                let mut format = supported_formats_range.find(|format| {
+                    if format.data_type != cpal::SampleFormat::F32 { return false; }
+                    if format.channels != 1 { return false; }
+                    if format.min_sample_rate.0 > 44100 || format.max_sample_rate.0 < 44100 { return false; }
+                    true
+                }).expect("No suitable format").with_max_sample_rate();
+                format.sample_rate = cpal::SampleRate(44100);
+                let _stream_id = event_loop.build_output_stream(&device, &format).unwrap();
 
-        let mut current_pattern = 0;
-        let mut current_line = 0;
-        event_loop.run(move |stream_id, stream_result| {
-            let stream_data = match stream_result {
-                Ok(data) => data,
-                Err(err) => {
-                    eprintln!("An error occured on stream {:?}: {}", stream_id, err);
-                    return;
-                }
-            };
-
-            match stream_data {
-                StreamData::Output { buffer: UnknownTypeOutputBuffer::F32(mut buffer) } => {
-                    for elem in buffer.iter_mut() {
-                        match rx.try_recv() {
-                            Ok(data) => {
-                                if (data.0).0 != current_pattern || (data.0).1 != current_line {
-                                    current_pattern = (data.0).0;
-                                    current_line = (data.0).1;
-                                    println!("Playing Pattern {}, Line {}", current_pattern, current_line);
-                                }
-
-                                let value = data.1[0];
-                                *elem = value;
-                            },
-                            Err(error) if error == mpsc::TryRecvError::Disconnected => {
-                                panic!("MPSC channel disconnected");
-                            },
-                            Err(_) => *elem = 0.0
+                let mut current_pattern = 0;
+                let mut current_line = 0;
+                event_loop.run(move |stream_id, stream_result| {
+                    let stream_data = match stream_result {
+                        Ok(data) => data,
+                        Err(err) => {
+                            eprintln!("An error occured on stream {:?}: {}", stream_id, err);
+                            return;
                         }
+                    };
+
+                    match stream_data {
+                        StreamData::Output { buffer: UnknownTypeOutputBuffer::F32(mut buffer) } => {
+                            for elem in buffer.iter_mut() {
+                                match rx.try_recv() {
+                                    Ok(data) => {
+                                        if (data.0).0 != current_pattern || (data.0).1 != current_line {
+                                            current_pattern = (data.0).0;
+                                            current_line = (data.0).1;
+                                            eprintln!("Playing Pattern {:x} (index {:x}), Line {:x}",
+                                                pattern_table[current_pattern as usize], current_pattern, current_line);
+                                        }
+
+                                        let value = data.1[0];
+                                        *elem = value;
+                                    },
+                                    Err(error) if error == mpsc::TryRecvError::Disconnected => {
+                                        panic!("MPSC channel disconnected");
+                                    },
+                                    Err(_) => *elem = 0.0
+                                }
+                            }
+                        },
+                        _ => (),
                     }
-                },
-                _ => (),
-            }
-        });
-    });
+                });
+            })
+        } else {
+            thread::spawn(move || {
+                let mut current_pattern = 0;
+                let mut current_line = 0;
+                let mut stdout = std::io::stdout();
+                while let Ok(data) = rx.recv() {
+                    if (data.0).0 != current_pattern || (data.0).1 != current_line {
+                        current_pattern = (data.0).0;
+                        current_line = (data.0).1;
+                        eprintln!("Playing Pattern {:x} (index {:x}), Line {:x}",
+                            pattern_table[current_pattern as usize], current_pattern, current_line);
+                    }
+                    stdout.write_f32::<NativeEndian>(data.1[0]).unwrap();
+                }
+            })
+        }
+    };
 
     let mut current_speed = 6;
     let mut current_tick = 0;
@@ -265,7 +286,7 @@ fn main() {
         }
         if next_pattern >= number_of_patterns as usize { break 'main; }
     }
-    println!("\rDone converting                     \n");
+    eprintln!("\rDone converting                     \n");
     std::mem::drop(tx);
     audio_thread.join().unwrap();
 }

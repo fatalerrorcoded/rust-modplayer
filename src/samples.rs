@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use std::io::{self, Cursor, Read, Seek, SeekFrom};
+use std::io::{Cursor, Read};
 use byteorder::{BigEndian, ReadBytesExt};
 
 use sample::Signal;
