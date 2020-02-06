@@ -14,10 +14,12 @@ use cpal::traits::{DeviceTrait, EventLoopTrait, HostTrait};
 
 use crate::samples::{Sample, SampleCursor};
 use crate::patterns::Pattern;
+use crate::notes::Note;
 use crate::channel_state::ChannelState;
 
 mod samples;
 mod patterns;
+mod notes;
 mod channel_state;
 
 fn sample_rate(period: u16) -> f64 {
@@ -131,8 +133,7 @@ fn main() {
                                                 pattern_table[current_pattern as usize], current_pattern, current_line);
                                         }
 
-                                        let value = data.1[0];
-                                        *elem = value;
+                                        *elem = data.1[0];
                                     },
                                     Err(error) if error == mpsc::TryRecvError::Disconnected => {
                                         panic!("MPSC channel disconnected");
@@ -233,12 +234,17 @@ fn main() {
                 }
 
                 if channel.number() != 0 && channel.period() != 0 {
-                    channel_state[i].period = channel.period();
-                    let mut cursor = SampleCursor::from(&samples[channel.number() as usize - 1]);
+                    let sample = &samples[channel.number() as usize - 1];
+                    let period = match Note::from(channel.period()) {
+                        Some(note) => note.get_period(sample.finetune()),
+                        None => channel.period()
+                    };
+                    channel_state[i].period = period;
+                    let mut cursor = SampleCursor::from(sample);
                     let interpolator = Linear::from_source(&mut cursor);
                     interpolators[i] = Some(Converter::from_hz_to_hz(
                         cursor, interpolator,
-                        sample_rate(channel.period()), 44100.0
+                        sample_rate(period), 44100.0
                     ));
                 }
             }
