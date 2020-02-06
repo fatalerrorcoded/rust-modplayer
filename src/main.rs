@@ -86,7 +86,7 @@ fn main() {
         }
     }
 
-    
+
 
     // 10 seconds of buffer
     let (tx, rx) = mpsc::sync_channel::<((u8, u8), <SampleCursor as Signal>::Frame)>(44100 * 10);
@@ -127,7 +127,7 @@ fn main() {
                                         if (data.0).0 != current_pattern || (data.0).1 != current_line {
                                             current_pattern = (data.0).0;
                                             current_line = (data.0).1;
-                                            eprintln!("Playing Pattern {:x} (index {:x}), Line {:x}",
+                                            eprintln!("Playing Pattern {:02X} (index {:02X}), Line {:02X}",
                                                 pattern_table[current_pattern as usize], current_pattern, current_line);
                                         }
 
@@ -154,7 +154,7 @@ fn main() {
                     if (data.0).0 != current_pattern || (data.0).1 != current_line {
                         current_pattern = (data.0).0;
                         current_line = (data.0).1;
-                        eprintln!("Playing Pattern {:x} (index {:x}), Line {:x}",
+                        eprintln!("Playing Pattern {:02X} (index {:02X}), Line {:02X}",
                             pattern_table[current_pattern as usize], current_pattern, current_line);
                     }
                     stdout.write_f32::<NativeEndian>(data.1[0]).unwrap();
@@ -207,9 +207,11 @@ fn main() {
                         else { channel_state[i].volume_slide = -(effect.arg_2() as i8); }
                     },
                     0xb => { // Position Jump
-                        next_pattern = effect.arg_joined() as usize;
-                        next_line = 0;
-                        current_tick = 0;
+                        if atty::is(atty::Stream::Stdout) { // We don't want to infinitely pump to stdout
+                            next_pattern = effect.arg_joined() as usize;
+                            next_line = 0;
+                            current_tick = 0;
+                        }
                     },
                     0xc => { // Set Volume
                         channel_state[i].volume_slide = 0;
