@@ -127,7 +127,299 @@ impl Note {
         }
     }
 
-    pub fn get_period(&self, finetune: i8) -> u16 {
+    pub fn increment(self, by: u8) -> Note {
+        let mut note = self;
+        for _ in 0..by {
+            note = match note {
+                Note::C0 => Note::D0,
+                Note::CSharp0 => Note::DSharp0,
+                Note::D0 => Note::E0,
+                Note::DSharp0 => Note::F0,
+                Note::E0 => Note::F0,
+                Note::F0 => Note::G0,
+                Note::FSharp0 => Note::GSharp0,
+                Note::G0 => Note::A0,
+                Note::GSharp0 => Note::ASharp0,
+                Note::A0 => Note::B0,
+                Note::ASharp0 => Note::C1,
+                Note::B0 => Note::C1,
+
+                Note::C1 => Note::D1,
+                Note::CSharp1 => Note::DSharp1,
+                Note::D1 => Note::E1,
+                Note::DSharp1 => Note::F1,
+                Note::E1 => Note::F1,
+                Note::F1 => Note::G1,
+                Note::FSharp1 => Note::GSharp1,
+                Note::G1 => Note::A1,
+                Note::GSharp1 => Note::ASharp1,
+                Note::A1 => Note::B1,
+                Note::ASharp1 => Note::C2,
+                Note::B1 => Note::C2,
+
+                Note::C2 => Note::D2,
+                Note::CSharp2 => Note::DSharp2,
+                Note::D2 => Note::E2,
+                Note::DSharp2 => Note::F2,
+                Note::E2 => Note::F2,
+                Note::F2 => Note::G2,
+                Note::FSharp2 => Note::GSharp2,
+                Note::G2 => Note::A2,
+                Note::GSharp2 => Note::ASharp2,
+                Note::A2 => Note::B2,
+                Note::ASharp2 => Note::C3,
+                Note::B2 => Note::C3,
+
+                Note::C3 => Note::D3,
+                Note::CSharp3 => Note::DSharp3,
+                Note::D3 => Note::E3,
+                Note::DSharp3 => Note::F3,
+                Note::E3 => Note::F3,
+                Note::F3 => Note::G3,
+                Note::FSharp3 => Note::GSharp3,
+                Note::G3 => Note::A3,
+                Note::GSharp3 => Note::ASharp3,
+                Note::A3 => Note::B3,
+                Note::ASharp3 => Note::C4,
+                Note::B3 => Note::C4,
+
+                Note::C4 => Note::D4,
+                Note::CSharp4 => Note::DSharp4,
+                Note::D4 => Note::E4,
+                Note::DSharp4 => Note::F4,
+                Note::E4 => Note::F4,
+                Note::F4 => Note::G4,
+                Note::FSharp4 => Note::GSharp4,
+                Note::G4 => Note::A4,
+                Note::GSharp4 => Note::ASharp4,
+                Note::A4 => Note::B4,
+                Note::ASharp4 => Note::B4,
+                Note::B4 => Note::B4,
+            };
+        }
+        note
+    }
+
+    pub fn decrement(self, by: u8) -> Note {
+        let mut note = self;
+        for _ in 0..by {
+            note = match note {
+                Note::C0 => Note::C0,
+                Note::CSharp0 => Note::C0,
+                Note::D0 => Note::C0,
+                Note::DSharp0 => Note::CSharp0,
+                Note::E0 => Note::D0,
+                Note::F0 => Note::E0,
+                Note::FSharp0 => Note::E0,
+                Note::G0 => Note::F0,
+                Note::GSharp0 => Note::FSharp0,
+                Note::A0 => Note::G0,
+                Note::ASharp0 => Note::GSharp0,
+                Note::B0 => Note::A0,
+
+                Note::C1 => Note::B0,
+                Note::CSharp1 => Note::B0,
+                Note::D1 => Note::C1,
+                Note::DSharp1 => Note::CSharp1,
+                Note::E1 => Note::D1,
+                Note::F1 => Note::E1,
+                Note::FSharp1 => Note::E1,
+                Note::G1 => Note::F1,
+                Note::GSharp1 => Note::FSharp1,
+                Note::A1 => Note::G1,
+                Note::ASharp1 => Note::GSharp1,
+                Note::B1 => Note::A1,
+
+                Note::C2 => Note::B1,
+                Note::CSharp2 => Note::B1,
+                Note::D2 => Note::C2,
+                Note::DSharp2 => Note::CSharp2,
+                Note::E2 => Note::D2,
+                Note::F2 => Note::E2,
+                Note::FSharp2 => Note::E2,
+                Note::G2 => Note::F2,
+                Note::GSharp2 => Note::FSharp2,
+                Note::A2 => Note::G2,
+                Note::ASharp2 => Note::GSharp2,
+                Note::B2 => Note::A2,
+
+                Note::C3 => Note::B2,
+                Note::CSharp3 => Note::B2,
+                Note::D3 => Note::C3,
+                Note::DSharp3 => Note::CSharp3,
+                Note::E3 => Note::D3,
+                Note::F3 => Note::E3,
+                Note::FSharp3 => Note::E3,
+                Note::G3 => Note::F3,
+                Note::GSharp3 => Note::FSharp3,
+                Note::A3 => Note::G3,
+                Note::ASharp3 => Note::GSharp3,
+                Note::B3 => Note::A3,
+
+                Note::C4 => Note::B3,
+                Note::CSharp4 => Note::B3,
+                Note::D4 => Note::C4,
+                Note::DSharp4 => Note::CSharp4,
+                Note::E4 => Note::D4,
+                Note::F4 => Note::E4,
+                Note::FSharp4 => Note::E4,
+                Note::G4 => Note::F4,
+                Note::GSharp4 => Note::FSharp4,
+                Note::A4 => Note::G4,
+                Note::ASharp4 => Note::GSharp4,
+                Note::B4 => Note::A4,
+            };
+        }
+        note
+    }
+
+    pub fn increment_half(self, by: u8) -> Note {
+        let mut note = self;
+        for _ in 0..by {
+            note = match note {
+                Note::C0 => Note::CSharp0,
+                Note::CSharp0 => Note::D0,
+                Note::D0 => Note::DSharp0,
+                Note::DSharp0 => Note::E0,
+                Note::E0 => Note::F0,
+                Note::F0 => Note::FSharp0,
+                Note::FSharp0 => Note::G0,
+                Note::G0 => Note::GSharp0,
+                Note::GSharp0 => Note::A0,
+                Note::A0 => Note::ASharp0,
+                Note::ASharp0 => Note::B0,
+                Note::B0 => Note::C1,
+
+                Note::C1 => Note::CSharp1,
+                Note::CSharp1 => Note::D1,
+                Note::D1 => Note::DSharp1,
+                Note::DSharp1 => Note::E1,
+                Note::E1 => Note::F1,
+                Note::F1 => Note::FSharp1,
+                Note::FSharp1 => Note::G1,
+                Note::G1 => Note::GSharp1,
+                Note::GSharp1 => Note::A1,
+                Note::A1 => Note::ASharp1,
+                Note::ASharp1 => Note::B1,
+                Note::B1 => Note::C2,
+
+                Note::C2 => Note::CSharp2,
+                Note::CSharp2 => Note::D2,
+                Note::D2 => Note::DSharp2,
+                Note::DSharp2 => Note::E2,
+                Note::E2 => Note::F2,
+                Note::F2 => Note::FSharp2,
+                Note::FSharp2 => Note::G2,
+                Note::G2 => Note::GSharp2,
+                Note::GSharp2 => Note::A2,
+                Note::A2 => Note::ASharp2,
+                Note::ASharp2 => Note::B2,
+                Note::B2 => Note::C3,
+
+                Note::C3 => Note::CSharp3,
+                Note::CSharp3 => Note::D3,
+                Note::D3 => Note::DSharp3,
+                Note::DSharp3 => Note::E3,
+                Note::E3 => Note::F3,
+                Note::F3 => Note::FSharp3,
+                Note::FSharp3 => Note::G3,
+                Note::G3 => Note::GSharp3,
+                Note::GSharp3 => Note::A3,
+                Note::A3 => Note::ASharp3,
+                Note::ASharp3 => Note::B3,
+                Note::B3 => Note::C4,
+
+                Note::C4 => Note::CSharp4,
+                Note::CSharp4 => Note::D4,
+                Note::D4 => Note::DSharp4,
+                Note::DSharp4 => Note::E4,
+                Note::E4 => Note::F4,
+                Note::F4 => Note::FSharp4,
+                Note::FSharp4 => Note::G4,
+                Note::G4 => Note::GSharp4,
+                Note::GSharp4 => Note::A4,
+                Note::A4 => Note::ASharp4,
+                Note::ASharp4 => Note::B4,
+                Note::B4 => Note::B4,
+            };
+        }
+        note
+    }
+
+    pub fn decrement_half(self, by: u8) -> Note {
+        let mut note = self;
+        for _ in 0..by {
+            note = match note {
+                Note::C0 => Note::C0,
+                Note::CSharp0 => Note::C0,
+                Note::D0 => Note::CSharp0,
+                Note::DSharp0 => Note::D0,
+                Note::E0 => Note::DSharp0,
+                Note::F0 => Note::E0,
+                Note::FSharp0 => Note::F0,
+                Note::G0 => Note::FSharp0,
+                Note::GSharp0 => Note::G0,
+                Note::A0 => Note::GSharp0,
+                Note::ASharp0 => Note::A0,
+                Note::B0 => Note::ASharp0,
+
+                Note::C1 => Note::B0,
+                Note::CSharp1 => Note::C1,
+                Note::D1 => Note::CSharp1,
+                Note::DSharp1 => Note::D1,
+                Note::E1 => Note::DSharp1,
+                Note::F1 => Note::E1,
+                Note::FSharp1 => Note::F1,
+                Note::G1 => Note::FSharp1,
+                Note::GSharp1 => Note::G1,
+                Note::A1 => Note::GSharp1,
+                Note::ASharp1 => Note::A1,
+                Note::B1 => Note::ASharp1,
+
+                Note::C2 => Note::B1,
+                Note::CSharp2 => Note::C2,
+                Note::D2 => Note::CSharp2,
+                Note::DSharp2 => Note::D2,
+                Note::E2 => Note::DSharp2,
+                Note::F2 => Note::E2,
+                Note::FSharp2 => Note::F2,
+                Note::G2 => Note::FSharp2,
+                Note::GSharp2 => Note::G2,
+                Note::A2 => Note::GSharp2,
+                Note::ASharp2 => Note::A2,
+                Note::B2 => Note::ASharp2,
+
+                Note::C3 => Note::B2,
+                Note::CSharp3 => Note::C3,
+                Note::D3 => Note::CSharp3,
+                Note::DSharp3 => Note::D3,
+                Note::E3 => Note::DSharp3,
+                Note::F3 => Note::E3,
+                Note::FSharp3 => Note::F3,
+                Note::G3 => Note::FSharp3,
+                Note::GSharp3 => Note::G3,
+                Note::A3 => Note::GSharp3,
+                Note::ASharp3 => Note::A3,
+                Note::B3 => Note::ASharp3,
+
+                Note::C4 => Note::B3,
+                Note::CSharp4 => Note::C4,
+                Note::D4 => Note::CSharp4,
+                Note::DSharp4 => Note::D4,
+                Note::E4 => Note::DSharp4,
+                Note::F4 => Note::E4,
+                Note::FSharp4 => Note::F4,
+                Note::G4 => Note::FSharp4,
+                Note::GSharp4 => Note::G4,
+                Note::A4 => Note::GSharp4,
+                Note::ASharp4 => Note::A4,
+                Note::B4 => Note::ASharp4,
+            };
+        }
+        note
+    }
+
+    pub fn get_period(self, finetune: i8) -> u16 {
         match finetune {
             0 => match self {
                 Note::C0 => 1712,
