@@ -5,10 +5,6 @@ use byteorder::{BigEndian, ReadBytesExt};
 
 use sample::Signal;
 
-fn map_range(x: f32, in_min: f32, in_max: f32, out_min: f32, out_max: f32) -> f32 {
-    (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
-}
-
 #[derive(Debug)]
 pub struct Sample {
     name: String,
@@ -91,13 +87,14 @@ impl<'a> SampleCursor<'a> {
     pub fn sample(&self) -> &'a Sample { self.sample }
 
     fn read_byte(&mut self) -> f32 {
+        use sample::Sample;
         if  self.offset >= self.sample.length as usize
             ||(self.repeating && self.offset >= (self.sample.repeat_offset as usize) + (self.sample.repeat_length as usize)) {
             self.offset = self.sample.repeat_offset as usize;
             self.repeating = true;
         }
         self.offset += 1;
-        map_range(self.sample.data[self.offset - 1] as f32, 0.0, 255.0, -1.0, 1.0)
+        self.sample.data[self.offset - 1].to_sample::<f32>()
     }
 }
 

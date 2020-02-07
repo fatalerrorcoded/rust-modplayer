@@ -7,7 +7,7 @@ use byteorder::{ReadBytesExt, WriteBytesExt, NativeEndian};
 use arr_macro::arr;
 
 use sample::{Frame, Signal};
-use sample::interpolate::{Converter, Linear};
+use sample::interpolate::{Converter, Floor};
 
 use cpal::{StreamData, UnknownTypeOutputBuffer};
 use cpal::traits::{DeviceTrait, EventLoopTrait, HostTrait};
@@ -22,8 +22,11 @@ mod patterns;
 mod notes;
 mod channel_state;
 
+static mut SAMPLE_RATE_CALC_VALUE: f64 = 7159090.5;
+
 fn sample_rate(period: u16) -> f64 {
-    7093789.2 / (period as f64 * 2.0)
+    let value = unsafe { SAMPLE_RATE_CALC_VALUE };
+    value / (period as f64 * 2.0)
 }
 
 fn main() {
@@ -32,6 +35,15 @@ fn main() {
     let file = args.next().expect("Provide a mod file as an argument");
     let file = Path::new(&file);
     let mod_data = fs::read(file).expect("Unable to read mod file");
+
+    match env::var("PAL_MODE") {
+        Ok(pal) => {
+            if pal != "0" && pal != "false" {
+                unsafe { SAMPLE_RATE_CALC_VALUE = 7093789.2; }
+            }
+        },
+        Err(_) => ()
+    };
 
     let mut cursor = Cursor::new(mod_data.as_slice());
     let song_name = {
@@ -62,8 +74,8 @@ fn main() {
 
     let nop_in_file = pattern_table.iter().max().unwrap() + 1;
 
-    if file_tag != "M.K." {
-        eprintln!("\nFile has file tag {}, can only read M.K.", file_tag);
+    if file_tag != "M.K." && file_tag != "M!K!" && file_tag != "FLT4" && file_tag != "4CHN" {
+        eprintln!("\nFile has file tag {}, can only read M.K., M!K! or FLT4 files", file_tag);
         return;
     }
 
@@ -91,7 +103,7 @@ fn main() {
 
 
     // 10 seconds of buffer
-    let (tx, rx) = mpsc::sync_channel::<((u8, u8), <SampleCursor as Signal>::Frame)>(44100 * 10);
+    let (tx, rx) = mpsc::sync_channel::<((u8, u8), <SampleCursor as Signal>::Frame)>(44100 / 50);
 
     let audio_thread = {
         if atty::is(atty::Stream::Stdout) {
@@ -174,9 +186,10 @@ fn main() {
     let mut next_pattern = current_pattern;
 
     let mut glissando = false;
-    let mut channel_state = [ChannelState::new(); 4];    
-    let mut interpolators: [Option<Converter<SampleCursor, Linear<<SampleCursor as Signal>::Frame>>>; 4] = arr![None; 4];
-
+    let mut channel_state = [ChannelState::new(); 4];
+    let mut interpolators: [Option<Converter<SampleCursor, Floor<<SampleCursor as Signal>::Frame>>>; 4] = arr![None; 4];
+    //let mut interpolators: [Option<Converter<SampleCursor, Sinc<[<SampleCursor as Signal>::Frame; 8]>>>; 4] = arr![None; 4];
+    
     'main: loop {
         if next_pattern != current_pattern {
             current_pattern = next_pattern;
@@ -196,15 +209,28 @@ fn main() {
                 channel_state[i].volume = channel_state[i].volume + channel_state[i].volume_slide;
                 if channel_state[i].volume > 64 { channel_state[i].volume = 64; channel_state[i].volume_slide = 0; }
                 if channel_state[i].volume < 0 { channel_state[i].volume = 0; channel_state[i].volume_slide = 0; }
-
+                
+                channel_state[i].arpeggio = (0, 0);
                 channel_state[i].portamento = 0;
 
                 channel_state[i].restart_sample_every = 0;
                 channel_state[i].cut_sample_after = 0;
 
                 match effect.number() {
+                    0x0 => { // Arpeggio
+                        if effect.arg_1() != 0 || effect.arg_1() != 0 {
+                            println!("Arpeggio on channel {}", i);
+                            channel_state[i].arpeggio = (effect.arg_1(), effect.arg_2());
+                        }
+                    }
                     0x1 => channel_state[i].portamento = effect.arg_joined() as i8, // Portamento up,
                     0x2 => channel_state[i].portamento = -(effect.arg_joined() as i8), // Portamento down
+                    0x3 => {
+                        match Note::from(channel.period()) {
+                            Some(note) => channel_state[i].slide_to_note = Some((note, effect.arg_joined())),
+                            None => ()
+                        }
+                    },
                     0x5 => { // Continue Slide to Note, do Volume Slide
                         if effect.arg_1() != 0 { channel_state[i].volume_slide = effect.arg_1() as i8; }
                         else { channel_state[i].volume_slide = -(effect.arg_2() as i8); }
@@ -263,14 +289,19 @@ fn main() {
                 if channel.number() != 0 && channel.period() != 0 {
                     let sample = &samples[channel.number() as usize - 1];
                     channel_state[i].period = channel.period();
+                    channel_state[i].original_period = channel.period();
                     channel_state[i].finetune = sample.finetune();
 
                     let mut cursor = SampleCursor::from(sample);
-                    let interpolator = Linear::from_source(&mut cursor);
+                    //let interpolator = Linear::from_source(&mut cursor);
                     let period = match Note::from(channel.period()) {
                         Some(note) => note.get_period(sample.finetune()),
                         None => channel.period()
                     };
+
+                    //let buf = ring_buffer::Fixed::from(arr![cursor.next(); 8]);
+                    //let interpolator = Sinc::new(buf);
+                    let interpolator = Floor::from_source(&mut cursor);
                     interpolators[i] = Some(Converter::from_hz_to_hz(
                         cursor, interpolator,
                         sample_rate(period), 44100.0
@@ -281,6 +312,27 @@ fn main() {
 
         for i in 0..4 {
             use std::io::{Seek, SeekFrom};
+            if channel_state[i].arpeggio != (0, 0) {
+                match Note::from(channel_state[i].original_period) {
+                    Some(note) => {
+                        let new_note = match current_tick % 3 {
+                            0 => note,
+                            1 => note.increment_half(channel_state[i].arpeggio.0),
+                            2 => note.increment_half(channel_state[i].arpeggio.1),
+                            _ => note,
+                        };
+
+                        let period = new_note.get_period(channel_state[i].finetune);
+                        channel_state[i].period = new_note.get_period(0);
+                        match &mut interpolators[i] {
+                            Some(interpolator) => interpolator.set_hz_to_hz(sample_rate(period), 44100.0),
+                            None => ()
+                        }
+                    },
+                    None => ()
+                }
+            }
+
             if channel_state[i].portamento != 0 {
                 match Note::from(channel_state[i].period) {
                     Some(note) => {
@@ -293,7 +345,9 @@ fn main() {
                                 else { note.decrement_half((-channel_state[i].portamento) as u8) }
                             }
                         };
+
                         let period = new_note.get_period(channel_state[i].finetune);
+                        channel_state[i].period = new_note.get_period(0);
                         match &mut interpolators[i] {
                             Some(interpolator) => interpolator.set_hz_to_hz(sample_rate(period), 44100.0),
                             None => ()
@@ -342,9 +396,9 @@ fn main() {
         }
 
         for j in 0..frames[0].len() {
-            let mut combined: [f32; 1] = frames[0][j];
+            let mut combined: [f32; 1] = frames[0][j].mul_amp([0.25]);
             for i in 1..frames.len() {
-                combined = combined.add_amp(frames[i][j]);
+                combined = combined.add_amp(frames[i][j].mul_amp([0.25]));
             }
             tx.send(((current_pattern as u8, current_line as u8), combined)).unwrap();
         }
