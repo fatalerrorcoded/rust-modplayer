@@ -1,7 +1,7 @@
 // Yes I f**king know
 #[allow(dead_code)]
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Note {
     C0,
     CSharp0,

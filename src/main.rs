@@ -173,6 +173,7 @@ fn main() {
     let mut next_line = current_line;
     let mut next_pattern = current_pattern;
 
+    let mut glissando = false;
     let mut channel_state = [ChannelState::new(); 4];    
     let mut interpolators: [Option<Converter<SampleCursor, Linear<<SampleCursor as Signal>::Frame>>>; 4] = arr![None; 4];
 
@@ -191,10 +192,19 @@ fn main() {
             for i in 0..4 {
                 let channel = line[i];
                 let effect = channel.effect();
+
                 channel_state[i].volume = channel_state[i].volume + channel_state[i].volume_slide;
                 if channel_state[i].volume > 64 { channel_state[i].volume = 64; channel_state[i].volume_slide = 0; }
                 if channel_state[i].volume < 0 { channel_state[i].volume = 0; channel_state[i].volume_slide = 0; }
+
+                channel_state[i].portamento = 0;
+
+                channel_state[i].restart_sample_every = 0;
+                channel_state[i].cut_sample_after = 0;
+
                 match effect.number() {
+                    0x1 => channel_state[i].portamento = effect.arg_joined() as i8, // Portamento up,
+                    0x2 => channel_state[i].portamento = -(effect.arg_joined() as i8), // Portamento down
                     0x5 => { // Continue Slide to Note, do Volume Slide
                         if effect.arg_1() != 0 { channel_state[i].volume_slide = effect.arg_1() as i8; }
                         else { channel_state[i].volume_slide = -(effect.arg_2() as i8); }
@@ -224,6 +234,23 @@ fn main() {
                         next_line = ((effect.arg_1() * 10) + effect.arg_2()) as usize;
                         current_tick = 0;
                     },
+                    0xe => match effect.arg_1() { // Extended effects
+                        0x3 => { // Glissando (half a note slides)
+                            if effect.arg_2() != 0 { glissando = true; }
+                            else { glissando = false; }
+                        },
+                        0x5 => { // Set finetune
+                            match &interpolators[i] {
+                                Some(interpolator) => interpolator.source().sample().set_finetune(effect.arg_2() as i8), 
+                                None => ()
+                            }
+                        },
+                        0xc => {
+                            if effect.arg_2() == 0 { interpolators[i] = None }
+                            else { channel_state[i].cut_sample_after = effect.arg_2() }
+                        }
+                        _ => ()
+                    },
                     0xf => { // Set Speed
                         channel_state[i].volume_slide = 0;
                         if effect.arg_joined() != 0 {
@@ -235,18 +262,56 @@ fn main() {
 
                 if channel.number() != 0 && channel.period() != 0 {
                     let sample = &samples[channel.number() as usize - 1];
+                    channel_state[i].period = channel.period();
+                    channel_state[i].finetune = sample.finetune();
+
+                    let mut cursor = SampleCursor::from(sample);
+                    let interpolator = Linear::from_source(&mut cursor);
                     let period = match Note::from(channel.period()) {
                         Some(note) => note.get_period(sample.finetune()),
                         None => channel.period()
                     };
-                    channel_state[i].period = period;
-                    let mut cursor = SampleCursor::from(sample);
-                    let interpolator = Linear::from_source(&mut cursor);
                     interpolators[i] = Some(Converter::from_hz_to_hz(
                         cursor, interpolator,
                         sample_rate(period), 44100.0
                     ));
                 }
+            }
+        }
+
+        for i in 0..4 {
+            use std::io::{Seek, SeekFrom};
+            if channel_state[i].portamento != 0 {
+                match Note::from(channel_state[i].period) {
+                    Some(note) => {
+                        let new_note = {
+                            if glissando == false {
+                                if channel_state[i].portamento > 0 { note.increment(channel_state[i].portamento as u8) }
+                                else { note.decrement((-channel_state[i].portamento) as u8) }
+                            } else {
+                                if channel_state[i].portamento > 0 { note.increment_half(channel_state[i].portamento as u8) }
+                                else { note.decrement_half((-channel_state[i].portamento) as u8) }
+                            }
+                        };
+                        let period = new_note.get_period(channel_state[i].finetune);
+                        match &mut interpolators[i] {
+                            Some(interpolator) => interpolator.set_hz_to_hz(sample_rate(period), 44100.0),
+                            None => ()
+                        }
+                    },
+                    None => ()
+                };
+            }
+
+            if channel_state[i].restart_sample_every != 0 && i % channel_state[i].restart_sample_every as usize == 0 {
+                match &mut interpolators[i] {
+                    Some(interpolator) => interpolator.source_mut().seek(SeekFrom::Start(0)).unwrap(),
+                    None => 0
+                };
+            }
+
+            if channel_state[i].cut_sample_after != 0 && i == channel_state[i].cut_sample_after as usize {
+                interpolators[i] = None;
             }
         }
 

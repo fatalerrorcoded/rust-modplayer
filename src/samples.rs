@@ -1,5 +1,6 @@
 #![allow(dead_code)]
-use std::io::{Cursor, Read};
+use std::io::{self, Cursor, Read, Seek, SeekFrom};
+use std::cell::RefCell;
 use byteorder::{BigEndian, ReadBytesExt};
 
 use sample::Signal;
@@ -12,7 +13,7 @@ fn map_range(x: f32, in_min: f32, in_max: f32, out_min: f32, out_max: f32) -> f3
 pub struct Sample {
     name: String,
     length: u32,
-    finetune: i8,
+    finetune: RefCell<i8>,
     volume: u8,
     repeat_offset: u32,
     repeat_length: u32,
@@ -21,7 +22,8 @@ pub struct Sample {
 
 impl Sample {
     pub fn name(&self) -> &str { &self.name }
-    pub fn finetune(&self) -> i8 { self.finetune }
+    pub fn finetune(&self) -> i8 { *self.finetune.borrow() }
+    pub fn set_finetune(&self, finetune: i8) { *self.finetune.borrow_mut() = finetune; }
     pub fn volume(&self) -> u8 { self.volume }
 
     pub fn length(&self) -> u32 { self.length }
@@ -64,7 +66,7 @@ impl From<&[u8; 30]> for Sample {
             length: length as u32 * 2,
             repeat_offset: repeat_offset as u32 * 2,
             repeat_length: repeat_length as u32 * 2,
-            finetune: (finetune & 0x07) - (finetune & 0x08),
+            finetune: RefCell::new((finetune & 0x07) - (finetune & 0x08)),
             data: Vec::new()
         }
     }
@@ -86,7 +88,7 @@ impl<'a> SampleCursor<'a> {
         }
     }
 
-    pub fn sample(& self) -> &'a Sample { self.sample }
+    pub fn sample(&self) -> &'a Sample { self.sample }
 
     fn read_byte(&mut self) -> f32 {
         if  self.offset >= self.sample.length as usize
@@ -108,7 +110,7 @@ impl<'a> SampleCursor<'a> {
         }
         Ok(i)
     }
-}
+}*/
 
 impl Seek for SampleCursor<'_> {
     fn seek(&mut self, seek_from: SeekFrom) -> io::Result<u64> {
@@ -126,7 +128,7 @@ impl Seek for SampleCursor<'_> {
             Ok(new_offset as u64)
         }
     }
-}*/
+}
 
 impl Signal for SampleCursor<'_> {
     type Frame = [f32; 1];
